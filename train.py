@@ -143,7 +143,8 @@ def main():
         }, is_best)
     print('Best accuracy: ', best_prec1)
 
-def train(train_loader, model, criterion, optimizer, epoch):
+def train(train_loader: torch.utils.data.DataLoader, model: dn.DenseNet3, 
+    criterion: nn.CrossEntropyLoss, optimizer: torch.optim.SGD, epoch: int):
     """Train for one epoch on the training set"""
     batch_time = AverageMeter()
     losses = AverageMeter()
@@ -154,14 +155,14 @@ def train(train_loader, model, criterion, optimizer, epoch):
 
     end = time.time()
     for i, (input, target) in enumerate(train_loader):
-        target = target.cuda(non_blocking = True)
-        input = input.cuda()
+        target: torch.Tensor = target.cuda(non_blocking = True)
+        input: torch.Tensor = input.cuda()
         input_var = torch.autograd.Variable(input)
         target_var = torch.autograd.Variable(target)
 
         # compute output
-        output = model(input_var)
-        loss = criterion(output, target_var)
+        output: torch.Tensor = model(input_var)
+        loss: torch.Tensor = criterion(output, target_var)
 
         # measure accuracy and record loss
         prec1 = accuracy(output.data, target, topk=(1,))[0]
@@ -189,7 +190,8 @@ def train(train_loader, model, criterion, optimizer, epoch):
         log_value('train_loss', losses.avg, epoch)
         log_value('train_acc', top1.avg, epoch)
 
-def validate(val_loader, model, criterion, epoch):
+def validate(val_loader: torch.utils.data.DataLoader, model: dn.DenseNet3, 
+    criterion: nn.CrossEntropyLoss, epoch: int):
     """Perform validation on the validation set"""
     batch_time = AverageMeter()
     losses = AverageMeter()
@@ -200,14 +202,14 @@ def validate(val_loader, model, criterion, epoch):
 
     end = time.time()
     for i, (input, target) in enumerate(val_loader):
-        target = target.cuda(non_blocking = True)
-        input = input.cuda()
-        input_var = torch.autograd.Variable(input, volatile=True)
-        target_var = torch.autograd.Variable(target, volatile=True)
+        target: torch.Tensor = target.cuda(non_blocking = True)
+        input: torch.Tensor = input.cuda()
+        input_var = torch.autograd.Variable(input, volatile = True)
+        target_var = torch.autograd.Variable(target, volatile = True)
 
         # compute output
-        output = model(input_var)
-        loss = criterion(output, target_var)
+        output: torch.Tensor = model(input_var)
+        loss: torch.Tensor = criterion(output, target_var)
 
         # measure accuracy and record loss
         prec1 = accuracy(output.data, target, topk=(1,))[0]
@@ -234,9 +236,9 @@ def validate(val_loader, model, criterion, epoch):
     return top1.avg
 
 
-def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
+def save_checkpoint(state: set, is_best: bool, filename: str = 'checkpoint.pth.tar'):
     """Saves checkpoint to disk"""
-    directory = "runs/%s/"%(args.name)
+    directory = "runs/{}/".format(args.name)
     if not os.path.exists(directory):
         os.makedirs(directory)
     filename = directory + filename
@@ -255,14 +257,14 @@ class AverageMeter(object):
         self.sum = 0
         self.count = 0
 
-    def update(self, val, n=1):
+    def update(self, val: torch.Tensor, n: int = 1):
         self.val = val
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
 
 
-def adjust_learning_rate(optimizer, epoch):
+def adjust_learning_rate(optimizer: torch.optim.SGD, epoch: int):
     """Sets the learning rate to the initial LR decayed by 10 after 150 and 225 epochs"""
     lr = args.lr * (0.1 ** (epoch // 150)) * (0.1 ** (epoch // 225))
     # log to TensorBoard
@@ -271,7 +273,7 @@ def adjust_learning_rate(optimizer, epoch):
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
-def accuracy(output, target, topk=(1,)):
+def accuracy(output: torch.Tensor, target: torch.Tensor, topk: tuple = (1,)) -> list[torch.Tensor]:
     """Computes the precision@k for the specified values of k"""
     maxk = max(topk)
     batch_size = target.size(0)
