@@ -80,12 +80,19 @@ def main():
         normalize
         ])
 
+    # Split dataset in train set and validation set
+    dataset = datasets.CIFAR10('../data', train=True, download=True, transform=transform_train)                        
+    torch.manual_seed(13)
+    val_size = 5000
+    train_size = len(dataset) - val_size
+    train_ds, val_ds = torch.utils.data.random_split(dataset, [train_size, val_size])
+
     kwargs = {'num_workers': 1, 'pin_memory': True}
-    train_loader = torch.utils.data.DataLoader(
-        datasets.CIFAR10('../data', train=True, download=True,
-                         transform=transform_train),
+    train_loader = torch.utils.data.DataLoader(train_ds,
         batch_size=args.batch_size, shuffle=True, **kwargs)
-    val_loader = torch.utils.data.DataLoader(
+    val_loader = torch.utils.data.DataLoader(val_ds,
+        batch_size=args.batch_size, shuffle=True, **kwargs)
+    test_loader = torch.utils.data.DataLoader(
         datasets.CIFAR10('../data', train=False, transform=transform_test),
         batch_size=args.batch_size, shuffle=True, **kwargs)
 
@@ -143,6 +150,19 @@ def main():
         }, is_best)
     print('Best accuracy: ', best_prec1)
 
+    test(test_loader, model)
+
+def test(test_loader: torch.utils.data.DataLoader, model: dn.DenseNet3):
+    correct = 0 
+    total = 0 
+    for (images, labels) in test_loader: 
+        images: torch.Tensor = images.cuda(non_blocking=True) 
+        outputs: torch.Tensor = model(images)
+        _, predicted = torch.max(outputs.cpu().data, 1) 
+        total += labels.size(0)
+        correct += (predicted == labels).sum() 
+    print('Accuracy of the network on the 10000 test images: %d %%' % ( 100 * correct / total))
+
 def train(train_loader: torch.utils.data.DataLoader, model: dn.DenseNet3, 
     criterion: nn.CrossEntropyLoss, optimizer: torch.optim.SGD, epoch: int):
     """Train for one epoch on the training set"""
@@ -155,7 +175,7 @@ def train(train_loader: torch.utils.data.DataLoader, model: dn.DenseNet3,
 
     end = time.time()
     for i, (input, target) in enumerate(train_loader):
-        target: torch.Tensor = target.cuda(non_blocking = True)
+        target: torch.Tensor = target.cuda(non_blocking=True)
         input: torch.Tensor = input.cuda()
         input_var = torch.autograd.Variable(input)
         target_var = torch.autograd.Variable(target)
