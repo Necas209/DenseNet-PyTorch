@@ -2,6 +2,7 @@ import argparse
 import os
 import shutil
 import time
+from matplotlib import pyplot as plt
 
 import torch
 import torch.nn as nn
@@ -45,6 +46,8 @@ parser.add_argument('--no-bottleneck', dest='bottleneck', action='store_false',
                     help='To not use bottleneck block')
 parser.add_argument('--resume', default='', type=str,
                     help='path to latest checkpoint (default: none)')
+parser.add_argument('--test', default='', type=str,
+                    help='path to trained model (default: none)')
 parser.add_argument('--name', default='DenseNet_BC_100_12', type=str,
                     help='name of experiment')
 parser.add_argument('--tensorboard',
@@ -124,6 +127,19 @@ def main():
 
     cudnn.benchmark = True
 
+    if args.test:
+        if os.path.isfile(args.test):
+            print("=> loading model '{}'".format(args.test))
+            checkpoint = torch.load(args.test)
+            args.start_epoch = checkpoint['epoch']
+            best_prec1 = checkpoint['best_prec1']
+            model.load_state_dict(checkpoint['state_dict'])
+            print("=> loaded model '{}'".format(args.test))   
+            test(test_loader, model)
+        else:
+            print("=> no model found at '{}'".format(args.test))
+        return
+
     # define loss function (criterion) and pptimizer
     criterion = nn.CrossEntropyLoss().cuda()
     optimizer = torch.optim.SGD(model.parameters(), args.lr,
@@ -153,14 +169,36 @@ def main():
     test(test_loader, model)
 
 def test(test_loader: torch.utils.data.DataLoader, model: dn.DenseNet3):
-    correct = 0 
-    total = 0 
-    for (images, labels) in test_loader: 
-        images: torch.Tensor = images.cuda(non_blocking=True) 
+    classes = { 0 : "airplane", 1 : "automobile", 2 : "bird", 3 : "cat", 4 : "deer", 
+                5 : "dog", 6 : "frog", 7 : "horse", 8 : "ship", 9 : "truck" }
+    count = 0
+    correct = 0
+    total = 0
+    for (images, labels) in test_loader:
+        labels: torch.Tensor = labels.cuda()
+        images: torch.Tensor = images.cuda(non_blocking=True)
+        
         outputs: torch.Tensor = model(images)
-        _, predicted = torch.max(outputs.cpu().data, 1) 
+        _, predicted = torch.max(outputs.cuda().data, 1)
         total += labels.size(0)
-        correct += (predicted == labels).sum() 
+        correct += (predicted == labels).sum()
+        
+        if args.test and count < 10:
+            count += 1
+            i = 0
+            while torch.equal(predicted[i], labels[i]): i += 1
+
+            invTrans = transforms.Compose([
+                transforms.Normalize(mean=[0., 0., 0.], std=[255. / x for x in [63.0, 62.1, 66.7]]),
+                transforms.Normalize(mean=[- x / 255. for x in [125.3, 123.0, 113.9]], std=[1., 1., 1.])
+                ])
+            images = invTrans(images)
+            print(f"Example [{count}]:")
+            print(f"Prediction: {classes[predicted[i].item()]}")
+            print(f"Label: {classes[labels[i].item()]}\n")
+            plt.imshow(images[i].permute(1, 2, 0).cpu())
+            plt.show()
+
     print('Accuracy of the network on the 10000 test images: %d %%' % ( 100 * correct / total))
 
 def train(train_loader: torch.utils.data.DataLoader, model: dn.DenseNet3, 
@@ -173,16 +211,14 @@ def train(train_loader: torch.utils.data.DataLoader, model: dn.DenseNet3,
     # switch to train mode
     model.train()
 
-    end = time.time()
+    end = time.perf_counter()
     for i, (input, target) in enumerate(train_loader):
         target: torch.Tensor = target.cuda(non_blocking=True)
         input: torch.Tensor = input.cuda()
-        input_var = torch.autograd.Variable(input)
-        target_var = torch.autograd.Variable(target)
 
         # compute output
-        output: torch.Tensor = model(input_var)
-        loss: torch.Tensor = criterion(output, target_var)
+        output: torch.Tensor = model(input)
+        loss: torch.Tensor = criterion(output, target)
 
         # measure accuracy and record loss
         prec1 = accuracy(output.data, target, topk=(1,))[0]
@@ -195,8 +231,8 @@ def train(train_loader: torch.utils.data.DataLoader, model: dn.DenseNet3,
         optimizer.step()
 
         # measure elapsed time
-        batch_time.update(time.time() - end)
-        end = time.time()
+        batch_time.update(time.perf_counter() - end)
+        end = time.perf_counter()
 
         if i % args.print_freq == 0:
             print('Epoch: [{0}][{1}/{2}]\t'
@@ -220,25 +256,24 @@ def validate(val_loader: torch.utils.data.DataLoader, model: dn.DenseNet3,
     # switch to evaluate mode
     model.eval()
 
-    end = time.time()
+    end = time.perf_counter()
     for i, (input, target) in enumerate(val_loader):
         target: torch.Tensor = target.cuda(non_blocking = True)
         input: torch.Tensor = input.cuda()
-        input_var = torch.autograd.Variable(input, volatile = True)
-        target_var = torch.autograd.Variable(target, volatile = True)
 
         # compute output
-        output: torch.Tensor = model(input_var)
-        loss: torch.Tensor = criterion(output, target_var)
+        with torch.no_grad():
+            output: torch.Tensor = model(input)
+            loss: torch.Tensor = criterion(output, target)
 
         # measure accuracy and record loss
-        prec1 = accuracy(output.data, target, topk=(1,))[0]
+        prec1: torch.Tensor = accuracy(output.data, target, topk=(1,))[0]
         losses.update(loss.data, input.size(0))
         top1.update(prec1, input.size(0))
 
         # measure elapsed time
-        batch_time.update(time.time() - end)
-        end = time.time()
+        batch_time.update(time.perf_counter() - end)
+        end = time.perf_counter()
 
         if i % args.print_freq == 0:
             print('Test: [{0}/{1}]\t'
@@ -293,7 +328,7 @@ def adjust_learning_rate(optimizer: torch.optim.SGD, epoch: int):
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
-def accuracy(output: torch.Tensor, target: torch.Tensor, topk: tuple = (1,)) -> list[torch.Tensor]:
+def accuracy(output: torch.Tensor, target: torch.Tensor, topk: tuple = (1,)) -> list:
     """Computes the precision@k for the specified values of k"""
     maxk = max(topk)
     batch_size = target.size(0)
