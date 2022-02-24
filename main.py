@@ -1,8 +1,6 @@
 import argparse
 import os
 import shutil
-import time
-from matplotlib import pyplot as plt
 
 import torch
 import torch.nn as nn
@@ -14,6 +12,7 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 
 import densenet as dn
+from utils import *
 
 # used for logging to TensorBoard
 from tensorboard_logger import configure, log_value
@@ -135,7 +134,7 @@ def main():
             best_prec1 = checkpoint['best_prec1']
             model.load_state_dict(checkpoint['state_dict'])
             print("=> loaded model '{}'".format(args.test))   
-            test(test_loader, model)
+            test(test_loader, model, args)
         else:
             print("=> no model found at '{}'".format(args.test))
         return
@@ -151,10 +150,10 @@ def main():
         adjust_learning_rate(optimizer, epoch)
 
         # train for one epoch
-        train(train_loader, model, criterion, optimizer, epoch)
+        train(train_loader, model, criterion, optimizer, epoch, args)
 
         # evaluate on validation set
-        prec1 = validate(val_loader, model, criterion, epoch)
+        prec1 = validate(val_loader, model, criterion, epoch, args)
 
         # remember best prec@1 and save checkpoint
         is_best = prec1 > best_prec1
@@ -166,130 +165,7 @@ def main():
         }, is_best)
     print('Best accuracy: ', best_prec1)
 
-    test(test_loader, model)
-
-def test(test_loader: torch.utils.data.DataLoader, model: dn.DenseNet3):
-    classes = { 0 : "airplane", 1 : "automobile", 2 : "bird", 3 : "cat", 4 : "deer", 
-                5 : "dog", 6 : "frog", 7 : "horse", 8 : "ship", 9 : "truck" }
-    count = 0
-    correct = 0
-    total = 0
-    for (images, labels) in test_loader:
-        labels: torch.Tensor = labels.cuda()
-        images: torch.Tensor = images.cuda(non_blocking=True)
-        
-        outputs: torch.Tensor = model(images)
-        _, predicted = torch.max(outputs.cuda().data, 1)
-        total += labels.size(0)
-        correct += (predicted == labels).sum()
-        
-        if args.test and count < 10:
-            count += 1
-            i = 0
-            while torch.equal(predicted[i], labels[i]): i += 1
-
-            invTrans = transforms.Compose([
-                transforms.Normalize(mean=[0., 0., 0.], std=[255. / x for x in [63.0, 62.1, 66.7]]),
-                transforms.Normalize(mean=[- x / 255. for x in [125.3, 123.0, 113.9]], std=[1., 1., 1.])
-                ])
-            images = invTrans(images)
-            print(f"Example [{count}]:")
-            print(f"Prediction: {classes[predicted[i].item()]}")
-            print(f"Label: {classes[labels[i].item()]}\n")
-            plt.imshow(images[i].permute(1, 2, 0).cpu())
-            plt.show()
-
-    print('Accuracy of the network on the 10000 test images: %d %%' % ( 100 * correct / total))
-
-def train(train_loader: torch.utils.data.DataLoader, model: dn.DenseNet3, 
-    criterion: nn.CrossEntropyLoss, optimizer: torch.optim.SGD, epoch: int):
-    """Train for one epoch on the training set"""
-    batch_time = AverageMeter()
-    losses = AverageMeter()
-    top1 = AverageMeter()
-
-    # switch to train mode
-    model.train()
-
-    end = time.perf_counter()
-    for i, (input, target) in enumerate(train_loader):
-        target: torch.Tensor = target.cuda(non_blocking=True)
-        input: torch.Tensor = input.cuda()
-
-        # compute output
-        output: torch.Tensor = model(input)
-        loss: torch.Tensor = criterion(output, target)
-
-        # measure accuracy and record loss
-        prec1 = accuracy(output.data, target, topk=(1,))[0]
-        losses.update(loss.data, input.size(0))
-        top1.update(prec1, input.size(0))
-
-        # compute gradient and do SGD step
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-        # measure elapsed time
-        batch_time.update(time.perf_counter() - end)
-        end = time.perf_counter()
-
-        if i % args.print_freq == 0:
-            print('Epoch: [{0}][{1}/{2}]\t'
-                  'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-                  'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
-                  'Prec@1 {top1.val:.3f} ({top1.avg:.3f})'.format(
-                      epoch, i, len(train_loader), batch_time=batch_time,
-                      loss=losses, top1=top1))
-    # log to TensorBoard
-    if args.tensorboard:
-        log_value('train_loss', losses.avg, epoch)
-        log_value('train_acc', top1.avg, epoch)
-
-def validate(val_loader: torch.utils.data.DataLoader, model: dn.DenseNet3, 
-    criterion: nn.CrossEntropyLoss, epoch: int):
-    """Perform validation on the validation set"""
-    batch_time = AverageMeter()
-    losses = AverageMeter()
-    top1 = AverageMeter()
-
-    # switch to evaluate mode
-    model.eval()
-
-    end = time.perf_counter()
-    for i, (input, target) in enumerate(val_loader):
-        target: torch.Tensor = target.cuda(non_blocking = True)
-        input: torch.Tensor = input.cuda()
-
-        # compute output
-        with torch.no_grad():
-            output: torch.Tensor = model(input)
-            loss: torch.Tensor = criterion(output, target)
-
-        # measure accuracy and record loss
-        prec1: torch.Tensor = accuracy(output.data, target, topk=(1,))[0]
-        losses.update(loss.data, input.size(0))
-        top1.update(prec1, input.size(0))
-
-        # measure elapsed time
-        batch_time.update(time.perf_counter() - end)
-        end = time.perf_counter()
-
-        if i % args.print_freq == 0:
-            print('Test: [{0}/{1}]\t'
-                  'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-                  'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
-                  'Prec@1 {top1.val:.3f} ({top1.avg:.3f})'.format(
-                      i, len(val_loader), batch_time=batch_time, loss=losses,
-                      top1=top1))
-
-    print(' * Prec@1 {top1.avg:.3f}'.format(top1=top1))
-    # log to TensorBoard
-    if args.tensorboard:
-        log_value('val_loss', losses.avg, epoch)
-        log_value('val_acc', top1.avg, epoch)
-    return top1.avg
-
+    test(test_loader, model, args)
 
 def save_checkpoint(state: set, is_best: bool, filename: str = 'checkpoint.pth.tar'):
     """Saves checkpoint to disk"""
@@ -301,24 +177,6 @@ def save_checkpoint(state: set, is_best: bool, filename: str = 'checkpoint.pth.t
     if is_best:
         shutil.copyfile(filename, 'runs/%s/'%(args.name) + 'model_best.pth.tar')
 
-class AverageMeter(object):
-    """Computes and stores the average and current value"""
-    def __init__(self):
-        self.reset()
-
-    def reset(self):
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
-
-    def update(self, val: torch.Tensor, n: int = 1):
-        self.val = val
-        self.sum += val * n
-        self.count += n
-        self.avg = self.sum / self.count
-
-
 def adjust_learning_rate(optimizer: torch.optim.SGD, epoch: int):
     """Sets the learning rate to the initial LR decayed by 10 after 150 and 225 epochs"""
     lr = args.lr * (0.1 ** (epoch // 150)) * (0.1 ** (epoch // 225))
@@ -327,21 +185,6 @@ def adjust_learning_rate(optimizer: torch.optim.SGD, epoch: int):
         log_value('learning_rate', lr, epoch)
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
-
-def accuracy(output: torch.Tensor, target: torch.Tensor, topk: tuple = (1,)) -> list:
-    """Computes the precision@k for the specified values of k"""
-    maxk = max(topk)
-    batch_size = target.size(0)
-
-    _, pred = output.topk(maxk, 1, True, True)
-    pred = pred.t()
-    correct = pred.eq(target.view(1, -1).expand_as(pred))
-
-    res = []
-    for k in topk:
-        correct_k = correct[:k].view(-1).float().sum(0)
-        res.append(correct_k.mul_(100.0 / batch_size))
-    return res
 
 if __name__ == '__main__':
     main()
