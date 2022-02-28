@@ -127,6 +127,7 @@ def main():
     cudnn.benchmark = True
 
     if args.test:
+        args.test = f"runs\{args.test}\checkpoint.pth.tar"
         if os.path.isfile(args.test):
             print("=> loading model '{}'".format(args.test))
             checkpoint = torch.load(args.test)

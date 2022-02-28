@@ -8,12 +8,12 @@ The [Official torch implementaion](https://github.com/liuzhuang13/DenseNet) cont
 
 Example usage with optional arguments for different hyperparameters (e.g., DenseNet-40-12):
 ```sh
-$ python main.py --layers 40 --growth 12 --no-bottleneck --reduce 1.0 --name DenseNet-40-12
+$ python main.py --layers 40 --growth 12 --no-bottleneck --reduce 1.0 --name DenseNet-40-12 --tensorboard
 ```
 
 Example usage for testing trained model (be sure to use the same hyperparameters, otherwise it won't work):
 ```sh
-$ python main.py --layers 40 --growth 12 --no-bottleneck --reduce 1.0 --test runs\DenseNet-40-12\checkpoint.pth.tar
+$ python main.py --layers 40 --growth 12 --no-bottleneck --reduce 1.0 --test DenseNet-40-12
 ```
 
 ## DenseNets
