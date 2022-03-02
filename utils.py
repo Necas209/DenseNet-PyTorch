@@ -85,7 +85,7 @@ def validate(val_loader: torch.utils.data.DataLoader, model: dn.DenseNet3,
 
     # switch to evaluate mode
     model.eval()
-
+    
     end = time.perf_counter()
     for i, (input, target) in enumerate(val_loader):
         target: torch.Tensor = target.cuda(non_blocking = True)
@@ -138,7 +138,8 @@ def test(test_loader: torch.utils.data.DataLoader, model: dn.DenseNet3, args: Na
         if args.test and count < 10:
             count += 1
             i = 0
-            while torch.equal(predicted[i], labels[i]): i += 1
+            while torch.equal(predicted[i], labels[i]) and i < args.batch_size: 
+                i += 1
 
             invTrans = transforms.Compose([
                 transforms.Normalize(mean=[0., 0., 0.], std=[255. / x for x in [63.0, 62.1, 66.7]]),
@@ -151,7 +152,7 @@ def test(test_loader: torch.utils.data.DataLoader, model: dn.DenseNet3, args: Na
             plt.imshow(images[i].permute(1, 2, 0).cpu())
             plt.show()
 
-    print('Accuracy of the network on the 10000 test images: %d %%' % ( 100 * correct / total))
+    print(f'Accuracy of the network on the 10000 test images: {100 * correct / total:.2f}%')
 
 def accuracy(output: torch.Tensor, target: torch.Tensor, topk: tuple = (1,)) -> list:
     """Computes the precision@k for the specified values of k"""
