@@ -121,38 +121,44 @@ def validate(val_loader: torch.utils.data.DataLoader, model: dn.DenseNet3,
     return top1.avg
 
 def test(test_loader: torch.utils.data.DataLoader, model: dn.DenseNet3, args: Namespace):
+    """Perform testing on the test set"""
     classes = { 0 : "airplane", 1 : "automobile", 2 : "bird", 3 : "cat", 4 : "deer", 
                 5 : "dog", 6 : "frog", 7 : "horse", 8 : "ship", 9 : "truck" }
     count = 0
-    correct = 0
-    total = 0
+    top1 = AverageMeter()
+
+    model.eval()
+
     for (images, labels) in test_loader:
-        labels: torch.Tensor = labels.cuda()
-        images: torch.Tensor = images.cuda(non_blocking=True)
+        labels: torch.Tensor = labels.cuda(non_blocking=True)
+        images: torch.Tensor = images.cuda()
         
-        outputs: torch.Tensor = model(images)
+        with torch.no_grad():
+            outputs: torch.Tensor = model(images)
+        
         _, predicted = torch.max(outputs.cuda().data, 1)
-        total += labels.size(0)
-        correct += (predicted == labels).sum()
-        
+        prec1: torch.Tensor = accuracy(outputs.data, labels, topk=(1,))[0]
+        top1.update(prec1, images.size(0))
+
         if args.test and count < 10:
-            count += 1
             i = 0
-            while torch.equal(predicted[i], labels[i]) and i < args.batch_size: 
+            while torch.equal(predicted[i], labels[i]):
                 i += 1
+                if i == args.batch_size: break
+            else:
+                count += 1
+                invTrans = transforms.Compose([
+                    transforms.Normalize(mean=[0., 0., 0.], std=[255. / x for x in [63.0, 62.1, 66.7]]),
+                    transforms.Normalize(mean=[- x / 255. for x in [125.3, 123.0, 113.9]], std=[1., 1., 1.])
+                    ])
+                images = invTrans(images)
+                print(f"Example [{count}]:")
+                print(f"Prediction: {classes[predicted[i].item()]}")
+                print(f"Label: {classes[labels[i].item()]}\n")
+                plt.imshow(images[i].permute(1, 2, 0).cpu())
+                plt.show()
 
-            invTrans = transforms.Compose([
-                transforms.Normalize(mean=[0., 0., 0.], std=[255. / x for x in [63.0, 62.1, 66.7]]),
-                transforms.Normalize(mean=[- x / 255. for x in [125.3, 123.0, 113.9]], std=[1., 1., 1.])
-                ])
-            images = invTrans(images)
-            print(f"Example [{count}]:")
-            print(f"Prediction: {classes[predicted[i].item()]}")
-            print(f"Label: {classes[labels[i].item()]}\n")
-            plt.imshow(images[i].permute(1, 2, 0).cpu())
-            plt.show()
-
-    print(f'Accuracy of the network on the 10000 test images: {100 * correct / total:.2f}%')
+    print(f'Accuracy of the network on the 10000 test images: {top1.avg:.2f}%')
 
 def accuracy(output: torch.Tensor, target: torch.Tensor, topk: tuple = (1,)) -> list:
     """Computes the precision@k for the specified values of k"""
