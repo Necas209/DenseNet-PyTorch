@@ -122,8 +122,8 @@ def validate(val_loader: torch.utils.data.DataLoader, model: dn.DenseNet3,
 
 def test(test_loader: torch.utils.data.DataLoader, model: dn.DenseNet3, args: Namespace):
     """Perform testing on the test set"""
-    classes = { 0 : "airplane", 1 : "automobile", 2 : "bird", 3 : "cat", 4 : "deer", 
-                5 : "dog", 6 : "frog", 7 : "horse", 8 : "ship", 9 : "truck" }
+    classes = ["airplane", "automobile", "bird", "cat", "deer", 
+                "dog", "frog", "horse", "ship", "truck"]
     count = 0
     top1 = AverageMeter()
 
