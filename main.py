@@ -2,20 +2,15 @@ import argparse
 import os
 import shutil
 
-import torch
-import torch.nn as nn
-import torch.nn.parallel
 import torch.backends.cudnn as cudnn
+import torch.nn.parallel
 import torch.optim
 import torch.utils.data
-import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-
-import densenet as dn
-from utils import *
-
 # used for logging to TensorBoard
-from tensorboard_logger import configure, log_value
+from tensorboard_logger import configure
+
+from train import *
 
 parser = argparse.ArgumentParser(description='PyTorch DenseNet Training')
 parser.add_argument('--epochs', default=300, type=int,
@@ -54,36 +49,39 @@ parser.add_argument('--tensorboard',
 parser.set_defaults(bottleneck=True)
 parser.set_defaults(augment=True)
 
-best_prec1 = 0
+best_prec1 = 0.
+args = Namespace
+
 
 def main():
     global args, best_prec1
     args = parser.parse_args()
-    if args.tensorboard: configure("runs/%s"%(args.name))
-    
+    if args.tensorboard:
+        configure(f"runs/{args.name}")
+
     # Data loading code
-    normalize = transforms.Normalize(mean=[x/255.0 for x in [125.3, 123.0, 113.9]],
-                                     std=[x/255.0 for x in [63.0, 62.1, 66.7]])
-    
+    normalize = transforms.Normalize(mean=[x / 255.0 for x in [125.3, 123.0, 113.9]],
+                                     std=[x / 255.0 for x in [63.0, 62.1, 66.7]])
+
     if args.augment:
         transform_train = transforms.Compose([
             transforms.RandomCrop(32, padding=4),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             normalize,
-            ])
+        ])
     else:
         transform_train = transforms.Compose([
             transforms.ToTensor(),
             normalize,
-            ])
+        ])
     transform_test = transforms.Compose([
         transforms.ToTensor(),
         normalize
-        ])
+    ])
 
     # Split dataset in train set and validation set
-    dataset = datasets.CIFAR10('../data', train=True, download=True, transform=transform_train)                        
+    dataset = datasets.CIFAR10('../data', train=True, download=True, transform=transform_train)
     torch.manual_seed(13)
     val_size = 5000
     train_size = len(dataset) - val_size
@@ -91,9 +89,9 @@ def main():
 
     kwargs = {'num_workers': 1, 'pin_memory': True}
     train_loader = torch.utils.data.DataLoader(train_ds,
-        batch_size=args.batch_size, shuffle=True, **kwargs)
+                                               batch_size=args.batch_size, shuffle=True, **kwargs)
     val_loader = torch.utils.data.DataLoader(val_ds,
-        batch_size=args.batch_size, shuffle=True, **kwargs)
+                                             batch_size=args.batch_size, shuffle=True, **kwargs)
     test_loader = torch.utils.data.DataLoader(
         datasets.CIFAR10('../data', train=False, transform=transform_test),
         batch_size=args.batch_size, shuffle=True, **kwargs)
@@ -101,11 +99,10 @@ def main():
     # create model
     model = dn.DenseNet3(args.layers, 10, args.growth, reduction=args.reduce,
                          bottleneck=args.bottleneck, dropRate=args.droprate)
-    
+
     # get the number of model parameters
-    print('Number of model parameters: {}'.format(
-        sum([p.data.nelement() for p in model.parameters()])))
-    
+    print(f'Number of model parameters: {sum([p.data.nelement() for p in model.parameters()])}')
+
     # for training on multiple GPUs. 
     # Use CUDA_VISIBLE_DEVICES=0,1 to specify which GPUs to use
     # model = torch.nn.DataParallel(model).cuda()
@@ -114,33 +111,32 @@ def main():
     # optionally resume from a checkpoint
     if args.resume:
         if os.path.isfile(args.resume):
-            print("=> loading checkpoint '{}'".format(args.resume))
+            print(f"=> loading checkpoint '{args.resume}'")
             checkpoint = torch.load(args.resume)
             args.start_epoch = checkpoint['epoch']
             best_prec1 = checkpoint['best_prec1']
             model.load_state_dict(checkpoint['state_dict'])
-            print("=> loaded checkpoint '{}' (epoch {})"
-                  .format(args.resume, checkpoint['epoch']))
+            print(f"=> loaded checkpoint '{args.resume}' (epoch {checkpoint['epoch']})")
         else:
-            print("=> no checkpoint found at '{}'".format(args.resume))
+            print(f"=> no checkpoint found at '{args.resume}'")
 
     cudnn.benchmark = True
 
     if args.test:
-        args.test = f"runs\{args.test}\checkpoint.pth.tar"
+        args.test = f"runs/{args.test}/checkpoint.pth.tar"
         if os.path.isfile(args.test):
-            print("=> loading model '{}'".format(args.test))
+            print(f"=> loading model '{args.test}'")
             checkpoint = torch.load(args.test)
             args.start_epoch = checkpoint['epoch']
             best_prec1 = checkpoint['best_prec1']
             model.load_state_dict(checkpoint['state_dict'])
-            print("=> loaded model '{}'".format(args.test))   
+            print(f"=> loaded model '{args.test}'")
             test(test_loader, model, args)
         else:
-            print("=> no model found at '{}'".format(args.test))
+            print(f"=> no model found at '{args.test}'")
         return
 
-    # define loss function (criterion) and pptimizer
+    # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda()
     optimizer = torch.optim.SGD(model.parameters(), args.lr,
                                 momentum=args.momentum,
@@ -168,15 +164,17 @@ def main():
 
     test(test_loader, model, args)
 
-def save_checkpoint(state: set, is_best: bool, filename: str = 'checkpoint.pth.tar'):
+
+def save_checkpoint(state: dict, is_best: bool, filename: str = 'checkpoint.pth.tar'):
     """Saves checkpoint to disk"""
-    directory = "runs/{}/".format(args.name)
+    directory = f"runs/{args.name}/"
     if not os.path.exists(directory):
         os.makedirs(directory)
     filename = directory + filename
     torch.save(state, filename)
     if is_best:
-        shutil.copyfile(filename, 'runs/%s/'%(args.name) + 'model_best.pth.tar')
+        shutil.copyfile(filename, f'runs/{args.name}/model_best.pth.tar')
+
 
 def adjust_learning_rate(optimizer: torch.optim.SGD, epoch: int):
     """Sets the learning rate to the initial LR decayed by 10 after 150 and 225 epochs"""
@@ -186,6 +184,7 @@ def adjust_learning_rate(optimizer: torch.optim.SGD, epoch: int):
         log_value('learning_rate', lr, epoch)
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
+
 
 if __name__ == '__main__':
     main()

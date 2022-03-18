@@ -2,16 +2,16 @@
 
 This repository contains a [PyTorch](http://pytorch.org/) implementation of the paper [Densely Connected Convolutional Networks](http://arxiv.org/abs/1608.06993). The code is based on the excellent [PyTorch example for training ResNet on Imagenet](https://github.com/pytorch/examples/tree/master/imagenet).
 
-The detault setting for this repo is a DenseNet-BC (with bottleneck layers and channel reduction), 100 layers, a growth rate of 12 and batch size 64. 
+The default setting for this repo is a DenseNet-BC (with bottleneck layers and channel reduction), 40 layers, a growth rate of 12 and batch size 64. 
 
-The [Official torch implementaion](https://github.com/liuzhuang13/DenseNet) contains further links to implementations in other frameworks.
+The [Official torch implementation](https://github.com/liuzhuang13/DenseNet) contains further links to implementations in other frameworks.
 
-Example usage with optional arguments for different hyperparameters (e.g., DenseNet-40-12):
+Example usage with optional arguments for different hyper-parameters (e.g., DenseNet-40-12):
 ```sh
 $ python main.py --layers 40 --growth 12 --no-bottleneck --reduce 1.0 --name DenseNet-40-12 --tensorboard
 ```
 
-Example usage for testing trained model (be sure to use the same hyperparameters, otherwise it won't work):
+Example usage for testing trained model (be sure to use the same hyper-parameters, otherwise it won't work):
 ```sh
 $ python main.py --layers 40 --growth 12 --no-bottleneck --reduce 1.0 --test DenseNet-40-12
 ```
@@ -38,7 +38,7 @@ Further, this implementation supports [easy checkpointing](https://github.com/an
 
 ### Tracking training progress with TensorBoard
 To track training progress, this implementation uses [TensorBoard](https://www.tensorflow.org/get_started/summaries_and_tensorboard) which offers great ways to track and compare multiple experiments. To track PyTorch experiments in TensorBoard we use [tensorboard_logger](https://github.com/TeamHG-Memex/tensorboard_logger) which can be installed with 
-```
+```shell
 pip install tensorboard_logger
 ```
 Example training curves for DenseNet-BC-100-12 (dark blue) and DenseNet-40-12 (light blue) for training loss and validation accuracy is shown below. 
