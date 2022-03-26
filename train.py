@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.parallel
 import torch.optim
-import torch.utils.data
+from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 
 import densenet as dn
@@ -18,8 +18,8 @@ classes = ("airplane", "automobile", "bird", "cat", "deer",
            "dog", "frog", "horse", "ship", "truck")
 
 
-def train(train_loader: torch.utils.data.DataLoader, model: dn.DenseNet3,
-          criterion: nn.CrossEntropyLoss, optimizer: torch.optim.SGD, epoch: int, args: Namespace):
+def train(train_loader: DataLoader, model: dn.DenseNet3, criterion: nn.CrossEntropyLoss,
+          optimizer: torch.optim.SGD, epoch: int, args: Namespace):
     """Train for one epoch on the training set"""
     batch_time = AverageMeter()
     losses = AverageMeter()
@@ -38,8 +38,8 @@ def train(train_loader: torch.utils.data.DataLoader, model: dn.DenseNet3,
         loss: torch.Tensor = criterion(output, target)
 
         # measure accuracy and record loss
-        prec1 = accuracy(output.data, target, topk=(1,))[0]
-        losses.update(loss.data, inp.size(0))
+        prec1 = accuracy(output, target, topk=(1,))[0]
+        losses.update(loss, inp.size(0))
         top1.update(prec1, inp.size(0))
 
         # compute gradient and do SGD step
@@ -62,8 +62,8 @@ def train(train_loader: torch.utils.data.DataLoader, model: dn.DenseNet3,
         log_value('train_acc', top1.avg, epoch)
 
 
-def validate(val_loader: torch.utils.data.DataLoader, model: dn.DenseNet3,
-             criterion: nn.CrossEntropyLoss, epoch: int, args: Namespace):
+def validate(val_loader: DataLoader, model: dn.DenseNet3, criterion: nn.CrossEntropyLoss,
+             epoch: int, args: Namespace):
     """Perform validation on the validation set"""
     batch_time = AverageMeter()
     losses = AverageMeter()
@@ -83,8 +83,8 @@ def validate(val_loader: torch.utils.data.DataLoader, model: dn.DenseNet3,
             loss: torch.Tensor = criterion(output, target)
 
         # measure accuracy and record loss
-        prec1: torch.Tensor = accuracy(output.data, target, topk=(1,))[0]
-        losses.update(loss.data, inp.size(0))
+        prec1: torch.Tensor = accuracy(output, target, topk=(1,))[0]
+        losses.update(loss, inp.size(0))
         top1.update(prec1, inp.size(0))
 
         # measure elapsed time
@@ -105,8 +105,7 @@ def validate(val_loader: torch.utils.data.DataLoader, model: dn.DenseNet3,
     return top1.avg
 
 
-def test(test_loader: torch.utils.data.DataLoader, model: dn.DenseNet3,
-         args: Namespace):
+def test(test_loader: DataLoader, model: dn.DenseNet3, args: Namespace):
     """Perform testing on the test set"""
     count = 0
     top1 = AverageMeter()
@@ -120,8 +119,8 @@ def test(test_loader: torch.utils.data.DataLoader, model: dn.DenseNet3,
         with torch.no_grad():
             outputs: torch.Tensor = model(images)
 
-        _, predicted = torch.max(outputs.cuda().data, 1)
-        prec1: torch.Tensor = accuracy(outputs.data, labels, topk=(1,))[0]
+        _, predicted = torch.max(outputs.cuda(), 1)
+        prec1 = accuracy(outputs, labels, topk=(1,))[0]
         top1.update(prec1, images.size(0))
 
         if args.test and count < 10:

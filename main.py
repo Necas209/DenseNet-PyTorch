@@ -98,7 +98,7 @@ def main():
 
     # create model
     model = dn.DenseNet3(args.layers, 10, args.growth, reduction=args.reduce,
-                         bottleneck=args.bottleneck, dropRate=args.droprate)
+                         bottleneck=args.bottleneck, droprate=args.droprate)
 
     # get the number of model parameters
     print(f'Number of model parameters: {sum([p.data.nelement() for p in model.parameters()])}')

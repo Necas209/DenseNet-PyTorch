@@ -11,7 +11,7 @@ Example usage with optional arguments for different hyper-parameters (e.g., Dens
 $ python main.py --layers 40 --growth 12 --no-bottleneck --reduce 1.0 --name DenseNet-40-12 --tensorboard
 ```
 
-Example usage for testing trained model (be sure to use the same hyper-parameters, otherwise it won't work):
+Example usage for testing trained model (be sure to use the same hyperparameters, otherwise it won't work):
 ```sh
 $ python main.py --layers 40 --growth 12 --no-bottleneck --reduce 1.0 --test DenseNet-40-12
 ```
@@ -19,11 +19,11 @@ $ python main.py --layers 40 --growth 12 --no-bottleneck --reduce 1.0 --test Den
 ## DenseNets
 [DenseNets [1]](https://arxiv.org/abs/1608.06993) were introduced in late 2016 after to the discoveries by [[2]](https://arxiv.org/abs/1603.09382) and [[3]](https://arxiv.org/abs/1605.06431) that [residual networks [4]](https://arxiv.org/abs/1512.03385) exhibit extreme parameter redundancy. DenseNets address this shortcoming by reducing the size of the modules and by introducing more connections between layers. In fact, the output of each layer flows directly as input to all subsequent layers of the same feature dimension as illustrated in their Figure 1 (below). This increases the dependency between the layers and thus reduces redundancy.
 
-<img src="https://github.com/andreasveit/densenet-pytorch/blob/master/images/Fig1.png?raw=true" width="400">
+<img src="https://github.com/andreasveit/densenet-pytorch/blob/master/images/Fig1.png?raw=true" width="400" alt="5-layer dense block with growth rate of k = 4. Each layer takes all precending feature-maps as input.">
 
 The improvements in accuracy per parameter are illustrated in their results on ImageNet (Figure 3). 
 
-<img src="https://github.com/andreasveit/densenet-pytorch/blob/master/images/FIg3.png?raw=true" width="400">
+<img src="https://github.com/andreasveit/densenet-pytorch/blob/master/images/FIg3.png?raw=true" width="400" alt="Validation erros per number parameters, for several networks, including DenseNets and ResNets.">
 
 ## This implementation
 The training code in train.py trains a DenseNet on CIFAR 10 or 100. To train on ImageNet, densenet.py can be copied into the [PyTorch example for training ResNets on Imagenet](https://github.com/pytorch/examples/tree/master/imagenet), upon which this repo is based. Note that for ImageNet the model contains four dense blocks.
@@ -63,7 +63,7 @@ If you use DenseNets in your work, please cite the original paper as:
 }
 ```
 
-If this implementation is useful to you and your project, please also consider to cite or acknowledge this code repository.
+If this implementation is useful to you and your project, please also consider citing or acknowledge this code repository.
 
 ### References 
 [1] Huang, G., Liu, Z., Weinberger, K. Q., & van der Maaten, L. (2016). Densely connected convolutional networks. arXiv preprint arXiv:1608.06993.
