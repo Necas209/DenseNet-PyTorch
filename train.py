@@ -1,5 +1,7 @@
 import time
 from argparse import Namespace
+
+import numpy as np
 from matplotlib import pyplot as plt
 # used for logging to TensorBoard
 from tensorboard_logger import log_value
@@ -112,6 +114,11 @@ def test(test_loader: DataLoader, model: dn.DenseNet3, args: Namespace):
 
     model.eval()
 
+    correct = 0
+    total = 0
+    class_correct = np.zeros(10)
+    class_total = np.zeros(10)
+
     for (images, labels) in test_loader:
         labels: torch.Tensor = labels.cuda(non_blocking=True)
         images: torch.Tensor = images.cuda()
@@ -122,6 +129,14 @@ def test(test_loader: DataLoader, model: dn.DenseNet3, args: Namespace):
         _, predicted = torch.max(outputs.cuda(), 1)
         prec1 = accuracy(outputs, labels, topk=(1,))[0]
         top1.update(prec1, images.size(0))
+
+        total += labels.size(0)
+        correct += (predicted == labels).sum()
+        c = (predicted == labels).squeeze()
+        for i in range(args.batch_size):
+            label = labels[i]
+            class_correct[label] += c[i]
+            class_total[label] += 1
 
         if args.test and count < 10:
             i = 0
@@ -137,9 +152,11 @@ def test(test_loader: DataLoader, model: dn.DenseNet3, args: Namespace):
                 ])
                 images = inv_trans(images)
                 print(f"Example [{count}]:")
-                print(f"Prediction: {classes[predicted[i].item()]}")
-                print(f"Label: {classes[labels[i].item()]}\n")
+                print(f"Prediction: {classes[predicted[i]]}")
+                print(f"Label: {classes[labels[i]]}")
                 plt.imshow(images[i].permute(1, 2, 0).cpu())
                 plt.show()
 
     print(f'Accuracy of the network on the 10000 test images: {top1.avg:.2f}%')
+    for i in range(10):
+        print(f'Accuracy of {classes[i]} : {100 * class_correct[i] / class_total[i]: .2f}%')
