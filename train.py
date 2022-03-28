@@ -133,7 +133,7 @@ def test(test_loader: DataLoader, model: dn.DenseNet3, args: Namespace):
         total += labels.size(0)
         correct += (predicted == labels).sum()
         c = (predicted == labels).squeeze()
-        for i in range(args.batch_size):
+        for i in range(labels.size(0)):
             label = labels[i]
             class_correct[label] += c[i]
             class_total[label] += 1
