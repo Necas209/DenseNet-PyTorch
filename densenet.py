@@ -6,7 +6,7 @@ import torch.nn.functional as f
 
 class BasicBlock(nn.Module):
     def __init__(self, in_planes: int, out_planes: int, droprate: float = 0.0):
-        super(BasicBlock, self).__init__()
+        super().__init__()
         self.bn1 = nn.BatchNorm2d(in_planes)
         self.relu = nn.ReLU(inplace=True)
         self.conv1 = nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=1,
@@ -22,7 +22,7 @@ class BasicBlock(nn.Module):
 
 class BottleneckBlock(nn.Module):
     def __init__(self, in_planes: int, out_planes: int, droprate: float = 0.0):
-        super(BottleneckBlock, self).__init__()
+        super().__init__()
         inter_planes = out_planes * 4
         self.bn1 = nn.BatchNorm2d(in_planes)
         self.relu = nn.ReLU(inplace=True)
@@ -45,7 +45,7 @@ class BottleneckBlock(nn.Module):
 
 class TransitionBlock(nn.Module):
     def __init__(self, in_planes: int, out_planes: int, droprate: float = 0.0):
-        super(TransitionBlock, self).__init__()
+        super().__init__()
         self.bn1 = nn.BatchNorm2d(in_planes)
         self.relu = nn.ReLU(inplace=True)
         self.conv1 = nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=1,
@@ -62,7 +62,7 @@ class TransitionBlock(nn.Module):
 class DenseBlock(nn.Module):
     def __init__(self, nb_layers: int, in_planes: int, growth_rate: int,
                  block, droprate: float = 0.0):
-        super(DenseBlock, self).__init__()
+        super().__init__()
         self.layer = self._make_layer(block, in_planes, growth_rate, nb_layers, droprate)
 
     @staticmethod
@@ -80,7 +80,7 @@ class DenseBlock(nn.Module):
 class DenseNet3(nn.Module):
     def __init__(self, depth: int, num_classes: int, growth_rate: int = 12,
                  reduction: float = 0.5, bottleneck: bool = True, droprate: float = 0.0):
-        super(DenseNet3, self).__init__()
+        super().__init__()
         in_planes = 2 * growth_rate
         n = (depth - 4) / 3
         if bottleneck:
