@@ -5,7 +5,7 @@ import shutil
 import torch.backends.cudnn as cudnn
 import torch.nn.parallel
 import torch.optim
-import torch.utils.data
+import torch.utils.data as data
 import torchvision.datasets as datasets
 # used for logging to TensorBoard
 from tensorboard_logger import configure
@@ -40,6 +40,8 @@ parser.add_argument('--no-bottleneck', dest='bottleneck', action='store_false',
                     help='To not use bottleneck block')
 parser.add_argument('--resume', default='', type=str,
                     help='path to latest checkpoint (default: none)')
+parser.add_argument('--imagenet', default=False, type=bool,
+                    help='Train with Imagenet (default: False')
 parser.add_argument('--test', default='', type=str,
                     help='path to trained model (default: none)')
 parser.add_argument('--name', default='DenseNet_BC_100_12', type=str,
@@ -60,12 +62,17 @@ def main():
         configure(f"runs/{args.name}")
 
     # Data loading code
-    normalize = transforms.Normalize(mean=[x / 255.0 for x in [125.3, 123.0, 113.9]],
-                                     std=[x / 255.0 for x in [63.0, 62.1, 66.7]])
+    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                     std=[0.229, 0.224, 0.225])
+
+    if args.dataset == 'imagenet':
+        input_size = 224
+    else:
+        input_size = 32
 
     if args.augment:
         transform_train = transforms.Compose([
-            transforms.RandomCrop(32, padding=4),
+            transforms.RandomCrop(input_size),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             normalize,
@@ -81,20 +88,22 @@ def main():
     ])
 
     # Split dataset in train set and validation set
-    dataset = datasets.CIFAR10('../data', train=True, download=True, transform=transform_train)
-    torch.manual_seed(13)
-    val_size = 5000
-    train_size = len(dataset) - val_size
-    train_ds, val_ds = torch.utils.data.random_split(dataset, [train_size, val_size])
+    split_ratio = 0.1
+    if args.imagenet:
+        dataset = datasets.ImageNet('../data', split='train', transform=transform_train)
+        test_ds = datasets.ImageNet('../data', split='val', transform=transform_test)
+    else:  # CIFAR-10
+        dataset = datasets.CIFAR10('../data', train=True, download=True, transform=transform_train)
+        test_ds = datasets.CIFAR10('../data', train=False, transform=transform_test)
+    ds_size = len(dataset)
+    val_size = int(split_ratio * ds_size)
+    train_size = ds_size - val_size
+    train_ds, val_ds = data.random_split(dataset, [train_size, val_size])
 
-    kwargs = {'num_workers': 1, 'pin_memory': True}
-    train_loader = torch.utils.data.DataLoader(train_ds,
-                                               batch_size=args.batch_size, shuffle=True, **kwargs)
-    val_loader = torch.utils.data.DataLoader(val_ds,
-                                             batch_size=args.batch_size, shuffle=True, **kwargs)
-    test_loader = torch.utils.data.DataLoader(
-        datasets.CIFAR10('../data', train=False, transform=transform_test),
-        batch_size=args.batch_size, shuffle=True, **kwargs)
+    kwargs = {'num_workers': 4, 'pin_memory': True}
+    train_loader = data.DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, **kwargs)
+    val_loader = data.DataLoader(val_ds, batch_size=args.batch_size, shuffle=True, **kwargs)
+    test_loader = data.DataLoader(test_ds, batch_size=args.batch_size, shuffle=True, **kwargs)
 
     # create model
     model = dn.DenseNet3(args.layers, 10, args.growth, reduction=args.reduce,

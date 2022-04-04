@@ -26,6 +26,7 @@ def train(train_loader: DataLoader, model: dn.DenseNet3, criterion: nn.CrossEntr
     batch_time = AverageMeter()
     losses = AverageMeter()
     top1 = AverageMeter()
+    top5 = AverageMeter()
 
     # switch to train mode
     model.train()
@@ -40,9 +41,16 @@ def train(train_loader: DataLoader, model: dn.DenseNet3, criterion: nn.CrossEntr
         loss: torch.Tensor = criterion(output, target)
 
         # measure accuracy and record loss
-        prec1 = accuracy(output, target, topk=(1,))[0]
+        if args.imagenet:
+            precs = accuracy(output, target, topk=(1, 5))
+            prec1 = precs[0]
+            prec5 = precs[1]
+            top1.update(prec1, inp.size(0))
+            top5.update(prec5, inp.size(0))
+        else:
+            prec1 = accuracy(output, target, topk=(1,))[0]
+            top1.update(prec1, inp.size(0))
         losses.update(loss, inp.size(0))
-        top1.update(prec1, inp.size(0))
 
         # compute gradient and do SGD step
         optimizer.zero_grad()
@@ -57,11 +65,14 @@ def train(train_loader: DataLoader, model: dn.DenseNet3, criterion: nn.CrossEntr
             print(f'Epoch: [{epoch}][{i}/{len(train_loader)}]\t'
                   f'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                   f'Loss {losses.val:.4f} ({losses.avg:.4f})\t'
-                  f'Prec@1 {top1.val:.3f} ({top1.avg:.3f})')
+                  f'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
+                  f'Prec@5 {top5.val:.3f} ({top5.avg:.3f})' if args.imagenet else '')
     # log to TensorBoard
     if args.tensorboard:
         log_value('train_loss', losses.avg, epoch)
-        log_value('train_acc', top1.avg, epoch)
+        log_value('train_acc1', top1.avg, epoch)
+        if args.imagenet:
+            log_value('train_acc5', top5.avg, epoch)
 
 
 def validate(val_loader: DataLoader, model: dn.DenseNet3, criterion: nn.CrossEntropyLoss,
@@ -70,6 +81,7 @@ def validate(val_loader: DataLoader, model: dn.DenseNet3, criterion: nn.CrossEnt
     batch_time = AverageMeter()
     losses = AverageMeter()
     top1 = AverageMeter()
+    top5 = AverageMeter()
 
     # switch to evaluate mode
     model.eval()
@@ -85,9 +97,16 @@ def validate(val_loader: DataLoader, model: dn.DenseNet3, criterion: nn.CrossEnt
             loss: torch.Tensor = criterion(output, target)
 
         # measure accuracy and record loss
-        prec1: torch.Tensor = accuracy(output, target, topk=(1,))[0]
+        if args.imagenet:
+            precs = accuracy(output, target, topk=(1, 5))
+            prec1 = precs[0]
+            prec5 = precs[1]
+            top1.update(prec1, inp.size(0))
+            top5.update(prec5, inp.size(0))
+        else:
+            prec1 = accuracy(output, target, topk=(1,))[0]
+            top1.update(prec1, inp.size(0))
         losses.update(loss, inp.size(0))
-        top1.update(prec1, inp.size(0))
 
         # measure elapsed time
         batch_time.update(time.perf_counter() - end)
@@ -97,13 +116,18 @@ def validate(val_loader: DataLoader, model: dn.DenseNet3, criterion: nn.CrossEnt
             print(f'Test: [{i}/{len(val_loader)}]\t'
                   f'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                   f'Loss {losses.val:.4f} ({losses.avg:.4f})\t'
-                  f'Prec@1 {top1.val:.3f} ({top1.avg:.3f})')
+                  f'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
+                  f'Prec@5 {top5.val:.3f} ({top5.avg:.3f})' if args.imagenet else '')
 
     print(' * Prec@1 {top1.avg:.3f}'.format(top1=top1))
+    if args.imagenet:
+        print(' * Prec@5 {top5.avg:.3f'.format(top5=top5))
     # log to TensorBoard
     if args.tensorboard:
         log_value('val_loss', losses.avg, epoch)
-        log_value('val_acc', top1.avg, epoch)
+        log_value('val_acc1', top1.avg, epoch)
+        if args.imagenet:
+            log_value('val_acc5', top5.avg, epoch)
     return top1.avg
 
 
@@ -111,6 +135,7 @@ def test(test_loader: DataLoader, model: dn.DenseNet3, args: Namespace):
     """Perform testing on the test set"""
     count = 0
     top1 = AverageMeter()
+    top5 = AverageMeter()
 
     model.eval()
 
@@ -127,8 +152,16 @@ def test(test_loader: DataLoader, model: dn.DenseNet3, args: Namespace):
             outputs: torch.Tensor = model(images)
 
         _, predicted = torch.max(outputs.cuda(), 1)
-        prec1 = accuracy(outputs, labels, topk=(1,))[0]
-        top1.update(prec1, images.size(0))
+        # measure accuracy and record loss
+        if args.imagenet:
+            precs = accuracy(outputs, labels, topk=(1, 5))
+            prec1 = precs[0]
+            prec5 = precs[1]
+            top1.update(prec1, images.size(0))
+            top5.update(prec5, images.size(0))
+        else:
+            prec1 = accuracy(outputs, labels, topk=(1,))[0]
+            top1.update(prec1, images.size(0))
 
         total += labels.size(0)
         correct += (predicted == labels).sum()
@@ -147,8 +180,8 @@ def test(test_loader: DataLoader, model: dn.DenseNet3, args: Namespace):
             else:
                 count += 1
                 inv_trans = transforms.Compose([
-                    transforms.Normalize(mean=[0., 0., 0.], std=[255. / x for x in [63.0, 62.1, 66.7]]),
-                    transforms.Normalize(mean=[- x / 255. for x in [125.3, 123.0, 113.9]], std=[1., 1., 1.])
+                    transforms.Normalize(mean=[0., 0., 0.], std=[1 / 0.229, 1 / 0.224, 1 / 0.225]),
+                    transforms.Normalize(mean=[-0.485, -0.456, -0.406], std=[1., 1., 1.])
                 ])
                 images = inv_trans(images)
                 print(f"Example [{count}]:")
@@ -157,6 +190,8 @@ def test(test_loader: DataLoader, model: dn.DenseNet3, args: Namespace):
                 plt.imshow(images[i].permute(1, 2, 0).cpu())
                 plt.show()
 
-    print(f'Accuracy of the network on the 10000 test images: {top1.avg:.2f}%')
+    print(f'Top-1 accuracy of the network on the 10000 test images: {top1.avg:.2f}%')
+    if args.imagenet:
+        print(f'Top-5 accuracy of the network on the 10000 test images: {top5.avg:.2f}%')
     for i in range(10):
         print(f'Accuracy of {classes[i]} : {100 * class_correct[i] / class_total[i]: .2f}%')

@@ -94,17 +94,17 @@ class DenseNet3(nn.Module):
                                padding=1, bias=False)
         # 1st block
         self.block1 = DenseBlock(n, in_planes, growth_rate, block, droprate)
-        in_planes = int(in_planes + n * growth_rate)
-        self.trans1 = TransitionBlock(in_planes, int(math.floor(in_planes * reduction)), droprate=droprate)
-        in_planes = int(math.floor(in_planes * reduction))
+        in_planes = in_planes + n * growth_rate
+        self.trans1 = TransitionBlock(in_planes, math.floor(in_planes * reduction), droprate=droprate)
+        in_planes = math.floor(in_planes * reduction)
         # 2nd block
         self.block2 = DenseBlock(n, in_planes, growth_rate, block, droprate)
-        in_planes = int(in_planes + n * growth_rate)
-        self.trans2 = TransitionBlock(in_planes, int(math.floor(in_planes * reduction)), droprate=droprate)
-        in_planes = int(math.floor(in_planes * reduction))
+        in_planes = in_planes + n * growth_rate
+        self.trans2 = TransitionBlock(in_planes, math.floor(in_planes * reduction), droprate=droprate)
+        in_planes = math.floor(in_planes * reduction)
         # 3rd block
         self.block3 = DenseBlock(n, in_planes, growth_rate, block, droprate)
-        in_planes = int(in_planes + n * growth_rate)
+        in_planes = in_planes + n * growth_rate
         # global average pooling and classifier
         self.bn1 = nn.BatchNorm2d(in_planes)
         self.relu = nn.ReLU(inplace=True)
@@ -127,6 +127,83 @@ class DenseNet3(nn.Module):
         out = self.trans2(self.block2(out))
         out = self.block3(out)
         out = self.relu(self.bn1(out))
+        out = f.avg_pool2d(out, 8)
+        out = out.view(-1, self.in_planes)
+        return self.fc(out)
+
+
+class DenseNet4(nn.Module):
+    def __init__(self, depth: int, num_classes: int, growth_rate: int = 12,
+                 reduction: float = 0.5, bottleneck: bool = True, droprate: float = 0.0):
+        super().__init__()
+        in_planes = 2 * growth_rate
+
+        if depth == 121:
+            stages = [6, 12, 24, 16]
+        elif depth == 161:
+            stages = [6, 12, 36, 24]
+        elif depth == 169:
+            stages = [6, 12, 32, 32]
+        elif depth == 201:
+            stages = [6, 12, 48, 32]
+        else:
+            n = (depth - 4) / 3
+            stages = [int(n / 2) if bottleneck else int(n)
+                      for _ in range(4)]
+
+        if bottleneck:
+            block = BottleneckBlock
+        else:
+            block = BasicBlock
+
+        # 1st trans before any dense block
+        self.conv1 = nn.Conv2d(3, in_planes, kernel_size=7, stride=2,
+                               padding=3, bias=False)
+        self.bn1 = nn.BatchNorm2d(in_planes)
+        self.relu1 = nn.ReLU(inplace=True)
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        # 1st block
+        self.block1 = DenseBlock(stages[0], in_planes, growth_rate, block, droprate)
+        in_planes = in_planes + growth_rate
+        self.trans1 = TransitionBlock(in_planes, math.floor(in_planes * reduction), droprate=droprate)
+        in_planes = math.floor(in_planes * reduction)
+        # 2nd block
+        self.block2 = DenseBlock(stages[1], in_planes, growth_rate, block, droprate)
+        in_planes = in_planes + growth_rate
+        self.trans2 = TransitionBlock(in_planes, math.floor(in_planes * reduction), droprate=droprate)
+        in_planes = math.floor(in_planes * reduction)
+        # 3rd block
+        self.block3 = DenseBlock(stages[2], in_planes, growth_rate, block, droprate)
+        in_planes = in_planes + growth_rate
+        self.trans3 = TransitionBlock(in_planes, math.floor(in_planes * reduction), droprate=droprate)
+        in_planes = math.floor(in_planes * reduction)
+        # 4th block
+        self.block4 = DenseBlock(stages[3], in_planes, growth_rate, block, droprate)
+        in_planes = in_planes + growth_rate
+        # global average pooling and classifier
+        self.bn2 = nn.BatchNorm2d(in_planes)
+        self.relu2 = nn.ReLU(inplace=True)
+        self.fc = nn.Linear(in_planes, num_classes)
+        self.in_planes = in_planes
+
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                m.weight.data.normal_(0, math.sqrt(2. / n))
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+            elif isinstance(m, nn.Linear):
+                m.bias.data.zero_()
+
+    def forward(self, x) -> torch.Tensor:
+        out = self.bn1(self.conv1(x))
+        out = self.maxpool(self.relu1(out))
+        out = self.trans1(self.block1(out))
+        out = self.trans2(self.block2(out))
+        out = self.trans3(self.block3(out))
+        out = self.block4(out)
+        out = self.relu2(self.bn2(out))
         out = f.avg_pool2d(out, 8)
         out = out.view(-1, self.in_planes)
         return self.fc(out)
