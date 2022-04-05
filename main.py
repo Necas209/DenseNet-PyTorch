@@ -67,23 +67,18 @@ def main():
                                      std=[0.229, 0.224, 0.225])
 
     if args.imagenet:
-        input_size = 224
-    else:
-        input_size = 32
-
-    if args.augment:
-        transform_train = transforms.Compose([
-            transforms.RandomCrop(input_size),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            normalize,
-        ])
-    else:
-        transform_train = transforms.Compose([
-            transforms.ToTensor(),
-            normalize,
-        ])
-    if args.imagenet:
+        if args.augment:
+            transform_train = transforms.Compose([
+                transforms.RandomResizedCrop(224),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                normalize,
+            ])
+        else:
+            transform_train = transforms.Compose([
+                transforms.ToTensor(),
+                normalize,
+            ])
         transform_test = transforms.Compose([
             transforms.Resize(256),
             transforms.CenterCrop(224),
@@ -91,28 +86,43 @@ def main():
             normalize,
         ])
     else:
+        if args.augment:
+            transform_train = transforms.Compose([
+                transforms.RandomCrop(32, padding=4),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                normalize,
+            ])
+        else:
+            transform_train = transforms.Compose([
+                transforms.ToTensor(),
+                normalize,
+            ])
         transform_test = transforms.Compose([
             transforms.ToTensor(),
             normalize
         ])
 
     # Split dataset in train set and validation set
-    split_ratio = 0.1
     if args.imagenet:
-        dataset = datasets.ImageFolder('..data/imagenet/train', transform=transform_train)
-        test_ds = datasets.ImageFolder('..data/imagenet/val', transform=transform_test)
+        folder = '../data/ILSVRC/Data/CLS-LOC/'
+        traindir = os.path.join(folder, 'train')
+        valdir = os.path.join(folder, 'val')
+        train_ds = datasets.ImageFolder(traindir, transform=transform_train)
+        val_ds = datasets.ImageFolder(valdir, transform=transform_test)
     else:  # CIFAR-10
         dataset = datasets.CIFAR10('../data', train=True, download=True, transform=transform_train)
         test_ds = datasets.CIFAR10('../data', train=False, transform=transform_test)
-    ds_size = len(dataset)
-    val_size = int(split_ratio * ds_size)
-    train_size = ds_size - val_size
-    train_ds, val_ds = data.random_split(dataset, [train_size, val_size])
+        ds_size = len(dataset)
+        val_size = int(0.1 * ds_size)
+        train_size = ds_size - val_size
+        train_ds, val_ds = data.random_split(dataset, [train_size, val_size])
 
     kwargs = {'num_workers': 4, 'pin_memory': True}
     train_loader = data.DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, **kwargs)
     val_loader = data.DataLoader(val_ds, batch_size=args.batch_size, shuffle=True, **kwargs)
-    test_loader = data.DataLoader(test_ds, batch_size=args.batch_size, shuffle=True, **kwargs)
+    if not args.imagenet:
+        test_loader = data.DataLoader(test_ds, batch_size=args.batch_size, shuffle=True, **kwargs)
 
     # create model
     if args.imagenet:
@@ -144,7 +154,7 @@ def main():
 
     cudnn.benchmark = True
 
-    if args.test:
+    if args.test and not args.imagenet:
         args.test = f"runs/{args.test}/checkpoint.pth.tar"
         if os.path.isfile(args.test):
             print(f"=> loading model '{args.test}'")
@@ -184,7 +194,8 @@ def main():
         }, is_best)
     print('Best accuracy: ', best_prec1)
 
-    test(test_loader, model, args)
+    if not args.imagenet:
+        test(test_loader, model, args)
 
 
 def save_checkpoint(state: dict, is_best: bool, filename: str = 'checkpoint.pth.tar'):
