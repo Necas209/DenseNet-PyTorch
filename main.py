@@ -40,8 +40,8 @@ parser.add_argument('--no-bottleneck', dest='bottleneck', action='store_false',
                     help='To not use bottleneck block')
 parser.add_argument('--resume', default='', type=str,
                     help='path to latest checkpoint (default: none)')
-parser.add_argument('--imagenet', default=False, type=bool,
-                    help='Train with Imagenet (default: False')
+parser.add_argument('--imagenet', dest='imagenet', action='store_true',
+                    help='To train on ImageNet')
 parser.add_argument('--test', default='', type=str,
                     help='path to trained model (default: none)')
 parser.add_argument('--name', default='DenseNet_BC_100_12', type=str,
@@ -50,6 +50,7 @@ parser.add_argument('--tensorboard',
                     help='Log progress to TensorBoard', action='store_true')
 parser.set_defaults(bottleneck=True)
 parser.set_defaults(augment=True)
+parser.set_defaults(imagenet=False)
 
 best_prec1 = 0.
 args = Namespace
@@ -65,7 +66,7 @@ def main():
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
 
-    if args.dataset == 'imagenet':
+    if args.imagenet:
         input_size = 224
     else:
         input_size = 32
@@ -82,16 +83,24 @@ def main():
             transforms.ToTensor(),
             normalize,
         ])
-    transform_test = transforms.Compose([
-        transforms.ToTensor(),
-        normalize
-    ])
+    if args.imagenet:
+        transform_test = transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            normalize,
+        ])
+    else:
+        transform_test = transforms.Compose([
+            transforms.ToTensor(),
+            normalize
+        ])
 
     # Split dataset in train set and validation set
     split_ratio = 0.1
     if args.imagenet:
-        dataset = datasets.ImageNet('../data', split='train', transform=transform_train)
-        test_ds = datasets.ImageNet('../data', split='val', transform=transform_test)
+        dataset = datasets.ImageFolder('..data/imagenet/train', transform=transform_train)
+        test_ds = datasets.ImageFolder('..data/imagenet/val', transform=transform_test)
     else:  # CIFAR-10
         dataset = datasets.CIFAR10('../data', train=True, download=True, transform=transform_train)
         test_ds = datasets.CIFAR10('../data', train=False, transform=transform_test)
@@ -106,8 +115,12 @@ def main():
     test_loader = data.DataLoader(test_ds, batch_size=args.batch_size, shuffle=True, **kwargs)
 
     # create model
-    model = dn.DenseNet3(args.layers, 10, args.growth, reduction=args.reduce,
-                         bottleneck=args.bottleneck, droprate=args.droprate)
+    if args.imagenet:
+        model = dn.DenseNet4(args.layers, 1000, args.growth, reduction=args.reduce,
+                             bottleneck=args.bottleneck, droprate=args.droprate)
+    else:
+        model = dn.DenseNet3(args.layers, 10, args.growth, reduction=args.reduce,
+                             bottleneck=args.bottleneck, droprate=args.droprate)
 
     # get the number of model parameters
     print(f'Number of model parameters: {sum([p.data.nelement() for p in model.parameters()])}')
@@ -187,7 +200,10 @@ def save_checkpoint(state: dict, is_best: bool, filename: str = 'checkpoint.pth.
 
 def adjust_learning_rate(optimizer: torch.optim.SGD, epoch: int):
     """Sets the learning rate to the initial LR decayed by 10 after 150 and 225 epochs"""
-    lr = args.lr * (0.1 ** (epoch // 150)) * (0.1 ** (epoch // 225))
+    if args.imagenet:
+        lr = args.lr * (0.1 ** (epoch // 30)) * (0.1 ** (epoch // 60))
+    else:
+        lr = args.lr * (0.1 ** (epoch // 150)) * (0.1 ** (epoch // 225))
     # log to TensorBoard
     if args.tensorboard:
         log_value('learning_rate', lr, epoch)

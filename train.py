@@ -119,9 +119,9 @@ def validate(val_loader: DataLoader, model: dn.DenseNet3, criterion: nn.CrossEnt
                   f'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
                   f'Prec@5 {top5.val:.3f} ({top5.avg:.3f})' if args.imagenet else '')
 
-    print(' * Prec@1 {top1.avg:.3f}'.format(top1=top1))
+    print(f' * Prec@1 {top1.avg:.3f}')
     if args.imagenet:
-        print(' * Prec@5 {top5.avg:.3f'.format(top5=top5))
+        print(f' * Prec@5 {top5.avg:.3f}')
     # log to TensorBoard
     if args.tensorboard:
         log_value('val_loss', losses.avg, epoch)

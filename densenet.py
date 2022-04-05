@@ -121,8 +121,8 @@ class DenseNet3(nn.Module):
             elif isinstance(m, nn.Linear):
                 m.bias.data.zero_()
 
-    def forward(self, x) -> torch.Tensor:
-        out: torch.Tensor = self.conv1(x)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        out = self.conv1(x)
         out = self.trans1(self.block1(out))
         out = self.trans2(self.block2(out))
         out = self.block3(out)
@@ -161,7 +161,7 @@ class DenseNet4(nn.Module):
                                padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(in_planes)
         self.relu1 = nn.ReLU(inplace=True)
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        self.maxp = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         # 1st block
         self.block1 = DenseBlock(stages[0], in_planes, growth_rate, block, droprate)
         in_planes = in_planes + growth_rate
@@ -198,7 +198,7 @@ class DenseNet4(nn.Module):
 
     def forward(self, x) -> torch.Tensor:
         out = self.bn1(self.conv1(x))
-        out = self.maxpool(self.relu1(out))
+        out = self.maxp(self.relu1(out))
         out = self.trans1(self.block1(out))
         out = self.trans2(self.block2(out))
         out = self.trans3(self.block3(out))
